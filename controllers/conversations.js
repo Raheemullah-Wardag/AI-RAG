@@ -1,7 +1,11 @@
 import pool from "../db.js";
 export const newConversation = async (req,res)=>{
    const id=  Number(req.params.id);
-   try{
+   
+     if (req.user.id !== id) {
+    return res.status(403).json({ error: 'You are not allowed to create conversation here' });
+  }
+try{
     const dbResult=await pool.query(
         'Insert into conversations(user_id) values ($1) returning *',
         [id]
@@ -16,6 +20,10 @@ catch (err){
 
 export const getConversation =async(req,res)=>{
     const id =Number(req.params.id);
+      if (req.user.id !== id) {
+    return res.status(403).json({ error: 'You are not allowed to access this resource' });
+  }
+
      try{
     const dbResult=await pool.query(
         'Select  *  from conversations where user_id = ($1)',
