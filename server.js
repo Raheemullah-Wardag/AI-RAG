@@ -7,15 +7,16 @@ import loginRouter from './routes/auth/login.js';
 import swaggerUi from 'swagger-ui-express';
 import { swaggerSpec } from './swagger.js';
 import rateLimit from 'express-rate-limit';
-
+import helmet from 'helmet';
 const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 10, // max 10 attempts per 15 minutes per IP
-  message: { error: 'Too many attempts, please try again after 15 minutes' },
-  standardHeaders: true,
-  legacyHeaders: false,
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 10, // max 10 attempts per 15 minutes per IP
+    message: { error: 'Too many attempts, please try again after 15 minutes' },
+    standardHeaders: true,
+    legacyHeaders: false,
 });
 const app = express();
+app.use(helmet());
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 app.use(express.json());
 app.use('/users', usersRouter);
