@@ -4,14 +4,19 @@ import { loginSchema, registerSchema } from '../schemas/userSchema.js';
 import { nameformatter } from '../utilities/nameformatter.js';
 import jwt from 'jsonwebtoken';
 import { AppError } from '../utilities/AppError.js';
+import redisClient from '../redis.js';
 export const login = async (req, res, next) => {
     const result = loginSchema.safeParse(req.body);
 
     if (!result.success) {
         return next(new AppError('Invalid login data', 400));
     }
-
+const key = `failed_attempts:${result.data.email}`
     try {
+      const loginAttempts =await redisClient.get(key);
+      if (loginAttempts && Number(loginAttempts) >= 5 ){
+        return next(new AppError('Two Many Login Attempts,Account Locked',429));
+      }
         const dbResult = await pool.query(
             'Select id,password_hash from users where email =($1)',
             [result.data.email]
@@ -23,9 +28,13 @@ export const login = async (req, res, next) => {
 
         const compare = await bcrypt.compare(result.data.password, dbResult.rows[0].password_hash);
         if (!compare) {
-            return next(new AppError('Invalid Email or Password Try Again', 401));
+          const attempts = await redisClient.incr(key);
+                if (attempts === 1) {
+                         await redisClient.expire(key, 900);
+}
+          return next(new AppError('Invalid Email or Password Try Again', 401));
         }
-
+  await redisClient.del(key)
         const loginToken = jwt.sign({ id: dbResult.rows[0].id }, process.env.JWT_SECRET, { expiresIn: '1h' });
         res.status(200).json({ message: 'User Loged In', authToken: loginToken });
     } catch (err) {
