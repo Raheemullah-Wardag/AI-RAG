@@ -8,6 +8,8 @@ import swaggerUi from 'swagger-ui-express';
 import { swaggerSpec } from './swagger.js';
 import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
+import { errorHandler } from './middelware/errorHandler.js';
+
 const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
     max: 10, // max 10 attempts per 15 minutes per IP
@@ -24,5 +26,6 @@ app.use('/users', conversationRouter);
 app.use('/conversations', messagesRouter);
 app.use('/auth', authLimiter);
 app.use('/auth', registerRouter);
-app.use('/auth', loginRouter,);
+app.use('/auth', loginRouter);
+app.use(errorHandler);
 app.listen(8000, () => console.log('Server running on port 8000'));
