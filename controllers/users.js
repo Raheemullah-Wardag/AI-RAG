@@ -2,73 +2,80 @@ import { email } from 'zod';
 import pool from '../db.js';
 import { updateUserSchema, userSchema } from '../schemas/userSchema.js';
 import { nameformatter } from '../utilities/nameformatter.js';
-export const  editUserWhole = async (req,res)=>{
+import { AppError } from '../utilities/AppError.js';
+
+
+export const  editUserWhole = async (req,res,next)=>{
     const result = userSchema.safeParse(req.body);
     if(!result.success){
-        return res.status(400).json ({error : result.error.issues})
+        return next(new AppError(result.error.issues, 400));
 
     }
     const id=Number(req.params.id);
- const name = nameformatter(result.data.name)
-try {
-    const dbResult= await pool.query(
-   ' UPDATE users SET name = $1, email = $2 WHERE id = $3 RETURNING *'    ,
-   [name ,result.data.email,id]
+    const name = nameformatter(result.data.name);
+    try {
+        const dbResult= await pool.query(
+            'UPDATE users SET name = $1, email = $2 WHERE id = $3 RETURNING *',
+            [name, result.data.email, id]
+        );
 
-    )
-   res.status(200).json({ message: 'User Overwritten' });
-  }catch (err){
-   console.error(err);
-    res.status(500).json({ error: 'Database error' });
+        if (dbResult.rows.length === 0) {
+            return next(new AppError('User not found', 404));
+        }
+
+        res.status(200).json({ message: 'User Overwritten', user: dbResult.rows[0] });
+    } catch (err){
+        console.error(err);
+        next(new AppError('Database error', 500));
     }
 }
-export const editUser=async(req,res)=>{
+export const editUser=async(req,res,next)=>{
   const result =updateUserSchema.safeParse(req.body);
- const id = Number(req.params.id);
+  const id = Number(req.params.id);
   
-    if (!result.success) {
-      return res.status(400).json({ errors: result.error.issues });
-    }
-  
-    const fields = [];
-    const values = [];
-    let paramIndex = 1;
-  
-    if (result.data.name !== undefined) {
-      fields.push(`name = $${paramIndex}`);
-      values.push(result.data.name);
-      paramIndex++;
-    }
-  
-    if (result.data.email !== undefined) {
-      fields.push(`email = $${paramIndex}`);
-      values.push(result.data.email);
-      paramIndex++;
-    }
-  
-    if (fields.length === 0) {
-      return res.status(400).json({ error: 'No fields provided to update' });
-    }
-  
-    values.push(id);
-  
-    try {
-      const dbResult = await pool.query(
-        `UPDATE users SET ${fields.join(', ')} WHERE id = $${paramIndex} RETURNING *`,
-        values
-      );
-  
-      if (dbResult.rows.length === 0) {
-        return res.status(404).json({ error: 'User not found' });
-      }
-  
-      res.status(200).json({ message: 'User updated', user: dbResult.rows[0] });
-    } catch (err) {
-      console.error(err);
-      res.status(500).json({ error: 'Database error' });
-    }
+  if (!result.success) {
+    return next(new AppError(result.error.issues, 400));
   }
-  export const deleteuser= async(req,res)=>{
+  
+  const fields = [];
+  const values = [];
+  let paramIndex = 1;
+  
+  if (result.data.name !== undefined) {
+    fields.push(`name = $${paramIndex}`);
+    values.push(result.data.name);
+    paramIndex++;
+  }
+  
+  if (result.data.email !== undefined) {
+    fields.push(`email = $${paramIndex}`);
+    values.push(result.data.email);
+    paramIndex++;
+  }
+  
+  if (fields.length === 0) {
+    return next(new AppError('No fields provided to update', 400));
+  }
+  
+  values.push(id);
+  
+  try {
+    const dbResult = await pool.query(
+      `UPDATE users SET ${fields.join(', ')} WHERE id = $${paramIndex} RETURNING *`,
+      values
+    );
+
+    if (dbResult.rows.length === 0) {
+      return next(new AppError('User not found', 404));
+    }
+
+    res.status(200).json({ message: 'User updated', user: dbResult.rows[0] });
+  } catch (err) {
+    console.error(err);
+    next(new AppError('Database error', 500));
+  }
+}
+  export const deleteuser= async(req,res,next )=>{
   
     const id = Number(req.params.id);
     
@@ -79,39 +86,39 @@ export const editUser=async(req,res)=>{
       );
       
       if (dbResult.rows.length===0){
-      return res.status(404).json({ message: 'User does not exists', user: dbResult.rows[0]})
-    }
+        return next(new AppError('User does not exists', 404));
+      }
+
       res.status(200).json({ message: 'User Deleted', user: dbResult.rows[0]});
     } catch (err) {
       console.error(err);
-      res.status(500).json({ error: 'Database error' });
-  
-  }
+      next(new AppError('Database error', 500));
+    }
 }
-export const findUser = async(req,res)=>{
+export const findUser = async(req,res,next)=>{
   const id = Number (req.params.id);
   try {
     const dbResult = await pool.query(
       'Select * from users where id =($1)',
      [id]
     );
-  if (dbResult.rows.length===0){
-      return res.status(404).json({ message: 'User does not exists', user: dbResult.rows[0]})
+    if (dbResult.rows.length===0){
+      return next(new AppError('User not found', 404));
     }
     res.status(200).json({ message: 'User found', user: dbResult.rows[0] });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Database error' });
+    next(new AppError('Database error', 500));
   }
  
 }
 
 
-export const createUser = async (req, res) => {
+export const createUser = async (req, res, next) => {
   const result = userSchema.safeParse(req.body);
 
   if (!result.success) {
-    return res.status(400).json({ errors: result.error.issues });
+    return next(new AppError('Invalid user data', 400));
   }
 
   const name = nameformatter(result.data.name)
@@ -124,6 +131,6 @@ export const createUser = async (req, res) => {
     res.status(201).json({ message: 'User created', user: dbResult.rows[0] });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Database error' });
+    next(new AppError('Database error', 500));
   }
 };
